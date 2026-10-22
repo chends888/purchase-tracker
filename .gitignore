@@ -10,6 +10,10 @@ lerna-debug.log*
 # Dependencies
 node_modules
 
+# Next.js
+.next
+out
+
 # Build
 dist
 dist-ssr
@@ -22,6 +26,7 @@ dist-ssr
 
 # TypeScript
 *.tsbuildinfo
+next-env.d.ts
 
 # Coverage / test
 coverage
