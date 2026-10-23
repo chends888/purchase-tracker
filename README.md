@@ -23,7 +23,9 @@ Phase 0: accounts, cloud-synced items, RLS. Stripe / free-item cap come later.
 
 1. In the Supabase dashboard open **SQL → New query**.
 2. Paste the contents of [`supabase/migrations/001_profiles_items.sql`](supabase/migrations/001_profiles_items.sql).
-3. Run it. This creates `profiles` + `items`, RLS policies, and a trigger that inserts a `profiles` row (`plan = free`) on signup.
+3. Run it. This creates `profiles` + `items`, RLS policies, table grants for `authenticated`, and a trigger that inserts a `profiles` row (`plan = free`) on signup.
+
+If you already ran an older `001` that had RLS but no grants, also run [`002_grants.sql`](supabase/migrations/002_grants.sql) (see Troubleshooting).
 
 ### 3. Auth settings (recommended for local)
 
@@ -81,6 +83,18 @@ Without env vars the app still starts: login/signup show a clear “configure Su
 - **`items`**: per-user purchase fields matching the UI (`name`, `store`, `price`, `url`, `notes`, `image`, `status`, `shipped_to`, `shipping_cost`, `handling_fee`, `category`)
 
 RLS ensures each user only selects/inserts/updates/deletes their own rows.
+
+## Troubleshooting
+
+### `permission denied for table items` (or `profiles`)
+
+RLS policies alone are not enough when Supabase **Automatically expose new tables** is off — roles also need `GRANT` privileges.
+
+1. Open **SQL → New query** in the Supabase dashboard.
+2. Paste and run [`supabase/migrations/002_grants.sql`](supabase/migrations/002_grants.sql).
+3. Retry the app (sign in again if needed).
+
+`002` is safe to re-run. It does **not** grant `INSERT` on `profiles` to `authenticated` (profile rows are created by the `handle_new_user` security-definer trigger).
 
 ## Out of scope (later phases)
 

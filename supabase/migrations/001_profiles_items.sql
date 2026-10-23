@@ -108,3 +108,12 @@ drop policy if exists "Users can delete own items" on public.items;
 create policy "Users can delete own items"
   on public.items for delete
   using (auth.uid() = user_id);
+
+-- Table privileges (required when "Automatically expose new tables" is off).
+-- Profiles: no INSERT for authenticated — rows are created by handle_new_user (security definer).
+grant usage on schema public to postgres, anon, authenticated, service_role;
+
+grant select, update on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.items to authenticated;
+
+grant usage, select on all sequences in schema public to authenticated;
