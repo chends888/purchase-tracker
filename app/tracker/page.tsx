@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { TrackerBoard } from '@/components/tracker/TrackerBoard'
 import { isSupabaseConfigured, rowToItem } from '@/lib/items'
 import { createClient } from '@/lib/supabase/server'
-import type { ItemRow, PurchaseItem } from '@/lib/types'
+import type { ItemRow, Plan, PurchaseItem } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +13,7 @@ export default async function TrackerPage() {
 
   let items: PurchaseItem[] = []
   let userEmail: string | null = null
+  let plan: Plan = 'free'
   let loadError: string | null = null
 
   try {
@@ -27,16 +28,25 @@ export default async function TrackerPage() {
 
     userEmail = user.email ?? null
 
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    const [itemsResult, profileResult] = await Promise.all([
+      supabase
+        .from('items')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle(),
+    ])
 
-    if (error) {
-      loadError = error.message
+    if (itemsResult.error) {
+      loadError = itemsResult.error.message
     } else {
-      items = ((data ?? []) as ItemRow[]).map(rowToItem)
+      items = ((itemsResult.data ?? []) as ItemRow[]).map(rowToItem)
+    }
+
+    if (profileResult.error) {
+      loadError = loadError ?? profileResult.error.message
+    } else if (profileResult.data?.plan === 'pro' || profileResult.data?.plan === 'free') {
+      plan = profileResult.data.plan
     }
   } catch (err) {
     loadError =
@@ -49,6 +59,7 @@ export default async function TrackerPage() {
     <TrackerBoard
       initialItems={items}
       userEmail={userEmail}
+      plan={plan}
       loadError={loadError}
     />
   )

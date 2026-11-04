@@ -1,8 +1,14 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
-import type { ItemInsert, PurchaseItem } from '@/lib/types'
-import { DEFAULT_CATEGORIES, STATUS, STATUS_COLORS } from '@/lib/constants'
+import type { ItemInsert, Plan, PurchaseItem } from '@/lib/types'
+import {
+  DEFAULT_CATEGORIES,
+  FREE_ITEM_LIMIT,
+  STATUS,
+  STATUS_COLORS,
+} from '@/lib/constants'
 import { totalCost } from '@/lib/items'
 import {
   createItem,
@@ -17,10 +23,12 @@ import { FilterDropdown } from './FilterDropdown'
 export function TrackerBoard({
   initialItems,
   userEmail,
+  plan = 'free',
   loadError,
 }: {
   initialItems: PurchaseItem[]
   userEmail: string | null
+  plan?: Plan
   loadError?: string | null
 }) {
   const [items, setItems] = useState<PurchaseItem[]>(initialItems)
@@ -111,6 +119,7 @@ export function TrackerBoard({
     catFilter,
     forwarderFilter,
   ].filter((f) => f !== 'All').length
+  const atFreeCap = plan !== 'pro' && items.length >= FREE_ITEM_LIMIT
 
   return (
     <div
@@ -184,18 +193,32 @@ export function TrackerBoard({
             </form>
             <button
               type="button"
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                if (atFreeCap) return
+                setShowModal(true)
+              }}
+              disabled={atFreeCap}
+              title={
+                atFreeCap
+                  ? `Free plan limit of ${FREE_ITEM_LIMIT} items reached`
+                  : undefined
+              }
               style={{
-                background: 'linear-gradient(135deg, #F5A623 0%, #E8851A 100%)',
+                background: atFreeCap
+                  ? '#3A3020'
+                  : 'linear-gradient(135deg, #F5A623 0%, #E8851A 100%)',
                 border: 'none',
                 borderRadius: 12,
                 padding: '11px 22px',
-                color: '#fff',
+                color: atFreeCap ? '#888' : '#fff',
                 fontFamily: "'DM Mono', monospace",
                 fontWeight: 700,
                 fontSize: 13,
-                cursor: 'pointer',
-                boxShadow: '0 4px 16px rgba(245,166,35,0.4)',
+                cursor: atFreeCap ? 'not-allowed' : 'pointer',
+                boxShadow: atFreeCap
+                  ? 'none'
+                  : '0 4px 16px rgba(245,166,35,0.4)',
+                opacity: atFreeCap ? 0.7 : 1,
               }}
             >
               + Add Item
@@ -205,6 +228,43 @@ export function TrackerBoard({
       </div>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 24px 60px' }}>
+        {atFreeCap && (
+          <div
+            style={{
+              background: '#FFF8EC',
+              border: '1.5px solid #F5D9A0',
+              borderRadius: 12,
+              padding: '12px 14px',
+              marginBottom: 16,
+              fontSize: 13,
+              color: '#8A5A00',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              Free plan limit reached ({FREE_ITEM_LIMIT}/{FREE_ITEM_LIMIT}{' '}
+              items). Pro unlocks unlimited items.
+            </span>
+            <Link
+              href="/pricing"
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#B07800',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Pro coming soon →
+            </Link>
+          </div>
+        )}
+
         {error && (
           <div
             style={{
@@ -551,7 +611,7 @@ export function TrackerBoard({
         )}
       </div>
 
-      {showModal && (
+      {showModal && !atFreeCap && (
         <AddModal
           onClose={() => setShowModal(false)}
           onAdd={addItem}

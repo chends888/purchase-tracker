@@ -1,9 +1,15 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { FREE_ITEM_LIMIT } from '@/lib/constants'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured, itemToRowPatch, rowToItem } from '@/lib/items'
-import type { ItemInsert, ItemRow, PurchaseItem, ItemUpdate } from '@/lib/types'
+import type { ItemInsert, ItemRow, Plan, PurchaseItem, ItemUpdate } from '@/lib/types'
+
+function freeItemLimit(): number {
+  const fromEnv = Number(process.env.FREE_ITEM_LIMIT)
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : FREE_ITEM_LIMIT
+}
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -66,7 +72,35 @@ export async function createItem(
     return { ok: false, error: 'Item name is required.' }
   }
 
-  // Phase 1 will enforce FREE_ITEM_LIMIT here for free-plan users.
+  const { data: profile, error: profileError } = await auth.supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', auth.user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    return { ok: false, error: profileError.message }
+  }
+
+  const plan = (profile?.plan as Plan | undefined) ?? 'free'
+  if (plan !== 'pro') {
+    const limit = freeItemLimit()
+    const { count, error: countError } = await auth.supabase
+      .from('items')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', auth.user.id)
+
+    if (countError) {
+      return { ok: false, error: countError.message }
+    }
+
+    if ((count ?? 0) >= limit) {
+      return {
+        ok: false,
+        error: `Free plan is limited to ${limit} items. Upgrade to Pro (coming soon) for unlimited items.`,
+      }
+    }
+  }
 
   const { data, error } = await auth.supabase
     .from('items')

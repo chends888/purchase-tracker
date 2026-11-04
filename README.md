@@ -2,7 +2,7 @@
 
 Multi-user purchase tracker (Want / Ordered / Delivered) built with **Next.js App Router**, **TypeScript**, and **Supabase** (Auth + Postgres).
 
-Phase 0: accounts, cloud-synced items, RLS. Stripe / free-item cap come later.
+Phase 0: accounts, cloud-synced items, RLS. Phase 1: free plan capped at **10** items (server + UI). Stripe comes in Phase 2.
 
 ## Stack
 
@@ -96,7 +96,14 @@ RLS policies alone are not enough when Supabase **Automatically expose new table
 
 `002` is safe to re-run. It does **not** grant `INSERT` on `profiles` to `authenticated` (profile rows are created by the `handle_new_user` security-definer trigger).
 
+## Free plan limit (Phase 1)
+
+- Constant: `FREE_ITEM_LIMIT = 10` in `lib/constants.ts` (optional env override `FREE_ITEM_LIMIT`).
+- Server: `createItem` rejects new items when `profiles.plan` is `free` and the user already has ≥ 10 items. `plan = pro` is uncapped.
+- UI: at the cap, **+ Add Item** is disabled and a short upgrade nudge links to `/pricing` (placeholder; no Stripe yet).
+
+**Verify:** sign in as a free user, add 10 items, try an 11th — create should fail with a clear error and the Add button stays disabled.
+
 ## Out of scope (later phases)
 
-- Free plan hard cap of 10 items (`FREE_ITEM_LIMIT` left commented in `lib/constants.ts`)
 - Stripe Checkout / Customer Portal at $5/mo

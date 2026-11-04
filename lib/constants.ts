@@ -37,5 +37,5 @@ export const CAT_COLORS = [
   '#888',
 ]
 
-// Phase 1: enforce this server-side + in the UI.
-// export const FREE_ITEM_LIMIT = 10
+/** Free-plan item cap. Override with FREE_ITEM_LIMIT env (server) if needed. */
+export const FREE_ITEM_LIMIT = 10
