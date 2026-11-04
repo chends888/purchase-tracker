@@ -260,7 +260,7 @@ export function TrackerBoard({
                 whiteSpace: 'nowrap',
               }}
             >
-              Pro coming soon →
+              Upgrade to Pro →
             </Link>
           </div>
         )}

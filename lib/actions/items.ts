@@ -97,7 +97,7 @@ export async function createItem(
     if ((count ?? 0) >= limit) {
       return {
         ok: false,
-        error: `Free plan is limited to ${limit} items. Upgrade to Pro (coming soon) for unlimited items.`,
+        error: `Free plan is limited to ${limit} items. Upgrade to Pro for unlimited items.`,
       }
     }
   }
