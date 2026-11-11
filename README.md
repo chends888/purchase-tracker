@@ -27,9 +27,9 @@ Multi-user purchase tracker (Want / Ordered / Delivered) built with **Next.js Ap
 
 1. In the Supabase dashboard open **SQL → New query**.
 2. Paste the contents of [`supabase/migrations/001_profiles_items.sql`](supabase/migrations/001_profiles_items.sql).
-3. Run it. This creates `profiles` + `items`, RLS policies, table grants for `authenticated`, and a trigger that inserts a `profiles` row (`plan = free`) on signup.
+3. Run it. This creates `profiles` + `items`, RLS policies, table grants for `authenticated` and `service_role`, and a trigger that inserts a `profiles` row (`plan = free`) on signup.
 
-If you already ran an older `001` that had RLS but no grants, also run [`002_grants.sql`](supabase/migrations/002_grants.sql) (see Troubleshooting).
+If you already ran an older `001` that had RLS but no grants, also run [`002_grants.sql`](supabase/migrations/002_grants.sql) (see Troubleshooting). If Stripe webhooks fail with `permission denied for table profiles` (Postgres `42501`) after `001`/`002`, run [`003_service_role_grants.sql`](supabase/migrations/003_service_role_grants.sql).
 
 ### 3. Auth settings (recommended for local)
 
@@ -121,7 +121,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 - **`profiles`**: `id` (FK `auth.users`), `email`, `stripe_customer_id`, `plan` (`free` \| `pro`), `plan_status`
 - **`items`**: per-user purchase fields matching the UI (`name`, `store`, `price`, `url`, `notes`, `image`, `status`, `shipped_to`, `shipping_cost`, `handling_fee`, `category`)
 
-RLS ensures each user only selects/inserts/updates/deletes their own rows. The Stripe webhook uses the **service role** key to update `plan` (no user session on that request).
+RLS ensures each user only selects/inserts/updates/deletes their own rows. The Stripe webhook uses the **service role** key to update `plan` (no user session on that request). `service_role` bypasses RLS but still needs table `GRANT`s (`SELECT`/`UPDATE` on `profiles`, full CRUD on `items`) — see `003_service_role_grants.sql`.
 
 ## Troubleshooting
 
@@ -133,14 +133,25 @@ RLS policies alone are not enough when Supabase **Automatically expose new table
 2. Paste and run [`supabase/migrations/002_grants.sql`](supabase/migrations/002_grants.sql).
 3. Retry the app (sign in again if needed).
 
-`002` is safe to re-run. It does **not** grant `INSERT` on `profiles` to `authenticated` (profile rows are created by the `handle_new_user` security-definer trigger).
+`002` is safe to re-run. It does **not** grant `INSERT` on `profiles` to `authenticated` (profile rows are created by the `handle_new_user` security-definer trigger). It also grants `service_role` privileges (same as `003`).
+
+### Stripe webhook: `permission denied for table profiles` (Postgres `42501`)
+
+The webhook’s admin client uses `SUPABASE_SERVICE_ROLE_KEY`. When table exposure/grants are restricted, `service_role` can still get `42501` on `profiles` even though RLS is bypassed.
+
+1. Open **SQL → New query** in the Supabase dashboard.
+2. Paste and run [`supabase/migrations/003_service_role_grants.sql`](supabase/migrations/003_service_role_grants.sql) (or re-run `002`, which includes the same grants).
+3. Retry the checkout webhook (`stripe listen` replay or pay again in test mode).
+
+`003` is safe to re-run. It grants `SELECT`/`UPDATE` on `profiles` and full CRUD on `items` to `service_role` only.
 
 ### Paid but still Free
 
 1. Confirm `stripe listen` (local) or the Dashboard webhook endpoint is receiving `checkout.session.completed`.
 2. Confirm `STRIPE_WEBHOOK_SECRET` matches that listener/endpoint.
 3. Confirm `SUPABASE_SERVICE_ROLE_KEY` is set and valid.
-4. Check the session’s `client_reference_id` / `metadata.user_id` is your auth user UUID.
+4. Confirm `service_role` table grants are applied (`003` / `002`) — see above if logs show Postgres `42501`.
+5. Check the session’s `client_reference_id` / `metadata.user_id` is your auth user UUID.
 
 ## Free plan limit (Phase 1)
 

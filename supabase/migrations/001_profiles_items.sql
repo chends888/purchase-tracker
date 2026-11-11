@@ -111,9 +111,14 @@ create policy "Users can delete own items"
 
 -- Table privileges (required when "Automatically expose new tables" is off).
 -- Profiles: no INSERT for authenticated — rows are created by handle_new_user (security definer).
+-- service_role: Stripe webhook updates profiles.plan (bypasses RLS but still needs GRANT).
 grant usage on schema public to postgres, anon, authenticated, service_role;
 
 grant select, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.items to authenticated;
 
+grant select, update on table public.profiles to service_role;
+grant select, insert, update, delete on table public.items to service_role;
+
 grant usage, select on all sequences in schema public to authenticated;
+grant usage, select on all sequences in schema public to service_role;
