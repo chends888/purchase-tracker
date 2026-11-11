@@ -22,6 +22,17 @@ export function getAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
   }
+  // Stable production hostname (custom domain or project .vercel.app), not a per-deploy URL.
+  if (
+    process.env.VERCEL_ENV === 'production' &&
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.replace(
+      /\/$/,
+      '',
+    )}`
+  }
+  // Preview / when production URL is unset: this deployment's host.
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`
   }
