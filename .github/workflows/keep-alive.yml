@@ -1,0 +1,34 @@
+# Optional fallback if Supabase Dashboard Cron is not enabled.
+# Primary path: Edge Function + Supabase Cron (see README).
+#
+# Enable by adding repo secrets:
+#   KEEP_ALIVE_URL    — https://<project-ref>.supabase.co/functions/v1/keep-alive
+#   KEEP_ALIVE_SECRET — same value set via `supabase secrets set KEEP_ALIVE_SECRET=...`
+#
+# Without those secrets the job exits 0 (skipped). Does not fail CI.
+
+name: Keep-alive (optional)
+
+on:
+  schedule:
+    # Every 4 days at 12:00 UTC (enough to avoid free-tier inactivity pause).
+    - cron: '0 12 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST keep-alive Edge Function
+        env:
+          KEEP_ALIVE_URL: ${{ secrets.KEEP_ALIVE_URL }}
+          KEEP_ALIVE_SECRET: ${{ secrets.KEEP_ALIVE_SECRET }}
+        run: |
+          if [ -z "$KEEP_ALIVE_URL" ] || [ -z "$KEEP_ALIVE_SECRET" ]; then
+            echo "KEEP_ALIVE_URL / KEEP_ALIVE_SECRET not set — skipping optional keep-alive ping."
+            exit 0
+          fi
+          curl -fsS -X POST "$KEEP_ALIVE_URL" \
+            -H "Authorization: Bearer ${KEEP_ALIVE_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{}'

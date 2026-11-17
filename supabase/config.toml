@@ -1,0 +1,8 @@
+# Minimal Supabase CLI config for Edge Functions.
+# Link with: supabase link --project-ref <YOUR_PROJECT_REF>
+#
+# keep-alive uses its own shared secret (KEEP_ALIVE_SECRET), not end-user JWTs.
+# Schedule the function via Dashboard Cron (see README) — once every 3–5 days is enough.
+
+[functions.keep-alive]
+verify_jwt = false

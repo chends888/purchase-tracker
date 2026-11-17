@@ -190,6 +190,95 @@ Local CLI `stripe listen` secrets are **not** valid for the Dashboard endpoint �
 
 RLS ensures each user only selects/inserts/updates/deletes their own rows. The Stripe webhook uses the **service role** key to update `plan` (no user session on that request). `service_role` bypasses RLS but still needs table `GRANT`s (`SELECT`/`UPDATE` on `profiles`, full CRUD on `items`) — see `003_service_role_grants.sql`.
 
+## Keep free-tier Supabase awake
+
+Free-tier projects pause after ~7 days of inactivity. This repo includes a Deno Edge Function [`supabase/functions/keep-alive`](supabase/functions/keep-alive) that runs a cheap `profiles` select (service role) so scheduled pings keep the DB active. JWT verification is off for this function (`supabase/config.toml`); callers must send a shared secret instead.
+
+**You** deploy the function and enable Cron on your project — nothing here deploys to Supabase for you.
+
+### Env / secrets
+
+| Name | Where | Purpose |
+|------|--------|---------|
+| `KEEP_ALIVE_SECRET` | Edge Function secret (`supabase secrets set`) | Shared secret; required on every invoke |
+| `SUPABASE_URL` | Auto-injected in Edge runtime | Project URL for the JS client |
+| `SUPABASE_SERVICE_ROLE_KEY` | Auto-injected in Edge runtime | Service-role client for the ping query |
+
+Auth header (either works):
+
+- `Authorization: Bearer ${KEEP_ALIVE_SECRET}`
+- `x-keep-alive-secret: ${KEEP_ALIVE_SECRET}`
+
+Do not commit the secret. Generate a long random string (e.g. `openssl rand -hex 32`).
+
+### Deploy (once)
+
+```bash
+# From repo root, with Supabase CLI logged in
+supabase link --project-ref <YOUR_PROJECT_REF>
+supabase secrets set KEEP_ALIVE_SECRET=<your-long-random-secret>
+supabase functions deploy keep-alive
+```
+
+`config.toml` already sets `verify_jwt = false` for `keep-alive`. Function URL:
+
+`https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/keep-alive`
+
+Smoke test:
+
+```bash
+curl -X POST "https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/keep-alive" \
+  -H "Authorization: Bearer <KEEP_ALIVE_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Expect `{"ok":true,...}`. Wrong/missing secret → `401`.
+
+### Schedule with Supabase Cron (primary)
+
+Once every **3–5 days** is enough for pause prevention (example: every 4 days).
+
+**Dashboard (recommended)**
+
+1. Supabase Dashboard → **Integrations → Cron** (or **Database → Cron**).
+2. **Create job**.
+3. Name: e.g. `keep-alive`.
+4. Schedule: cron `0 12 */4 * *` (12:00 UTC every 4 days) or natural language “every 4 days”.
+5. Type: **HTTP request** (so you can set the secret header).
+6. Method: `POST`
+7. URL: `https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/keep-alive`
+8. Headers: `Authorization` = `Bearer <KEEP_ALIVE_SECRET>`, `Content-Type` = `application/json`
+9. Body: `{}`
+10. Save / enable. Use **Run now** once to confirm.
+
+If the UI offers **Supabase Edge Function** as the job type, only use it if you can attach the same `Authorization: Bearer …` header; otherwise stick to **HTTP request**.
+
+**SQL alternative** (`pg_cron` + `pg_net`; enable both if needed):
+
+```sql
+select cron.schedule(
+  'keep-alive',
+  '0 12 */4 * *',
+  $$
+  select net.http_post(
+    url := 'https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/keep-alive',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <KEEP_ALIVE_SECRET>'
+    ),
+    body := '{}'::jsonb
+  ) as request_id;
+  $$
+);
+```
+
+Prefer storing the secret in [Vault](https://supabase.com/docs/guides/database/vault) instead of pasting it into SQL long-term.
+
+### Optional: GitHub Action fallback
+
+[`.github/workflows/keep-alive.yml`](.github/workflows/keep-alive.yml) POSTs the function every 4 days **only if** repo secrets `KEEP_ALIVE_URL` and `KEEP_ALIVE_SECRET` are set; otherwise the job is skipped. Prefer Supabase Cron; use the Action only as a backup.
+
 ## Troubleshooting
 
 ### `permission denied for table items` (or `profiles`)
